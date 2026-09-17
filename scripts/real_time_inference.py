@@ -1,23 +1,39 @@
+import os
+import sys
 import cv2
 import numpy as np
 import pickle
 from tensorflow.keras.models import load_model
-from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from tensorflow import keras
+preprocess_input = keras.applications.mobilenet_v2.preprocess_input
 import time
+
+# Ensure UTF-8 output encoding for Windows consoles
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 class ISLInterpreter:
     def __init__(self, model_path='models/isl_model.h5', 
                  label_map_path='data/label_map.pkl'):
         """Initialize the ISL interpreter"""
         
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found at '{model_path}'. Please train the model first using scripts/train_model.py.")
+        if not os.path.exists(label_map_path):
+            raise FileNotFoundError(f"Label map not found at '{label_map_path}'. Please run scripts/data_preprocessing.py first.")
+            
         print("Loading model...", end=" ")
         self.model = load_model(model_path)
-        print("✓")
+        print("[OK]")
         
         print("Loading label map...", end=" ")
         with open(label_map_path, 'rb') as f:
             self.label_map = pickle.load(f)
-        print("✓")
+        print("[OK]")
         
         # Reverse label map (index -> gesture name)
         self.reverse_label_map = {v: k for k, v in self.label_map.items()}
@@ -55,7 +71,7 @@ class ISLInterpreter:
         
         return gesture_name, confidence, predictions
     
-    def run_inference(self):
+    def run_inference(self, camera_index=0):
         """Run real-time inference from webcam"""
         
         print(f"\n{'='*50}")
@@ -64,13 +80,19 @@ class ISLInterpreter:
         print("\nGestures:", list(self.label_map.keys()))
         print("Press 'q' to quit\n")
         
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(camera_index)
+        if not cap.isOpened():
+            print(f"Error: Could not open camera with index {camera_index}.")
+            print("Please ensure a webcam is connected and not being used by another application.")
+            return
+            
         fps_time = time.time()
         frame_count = 0
         
         while True:
             ret, frame = cap.read()
             if not ret:
+                print("\nCamera stream ended or disconnected.")
                 break
             
             # Flip for mirror effect

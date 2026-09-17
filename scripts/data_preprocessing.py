@@ -1,10 +1,23 @@
 import os
+import sys
 import cv2
 import numpy as np
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+import tensorflow as tf
+from tensorflow import keras
 import pickle
+
+ImageDataGenerator = keras.preprocessing.image.ImageDataGenerator
+preprocess_input = keras.applications.mobilenet_v2.preprocess_input
+to_categorical = keras.utils.to_categorical
+
+# Ensure UTF-8 output encoding for Windows consoles
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 def preprocess_data(img_size=224, data_dir='data/train'):
     """
@@ -14,7 +27,12 @@ def preprocess_data(img_size=224, data_dir='data/train'):
     images = []
     labels = []
     label_map = {}
-    gesture_dirs = os.listdir(data_dir)
+    
+    if not os.path.exists(data_dir):
+        print(f"Error: Dataset directory '{data_dir}' not found.")
+        return None
+        
+    gesture_dirs = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
     
     print(f"\n{'='*50}")
     print("DATA PREPROCESSING")
@@ -25,18 +43,17 @@ def preprocess_data(img_size=224, data_dir='data/train'):
         label_map[gesture] = idx
         gesture_path = os.path.join(data_dir, gesture)
         
-        if not os.path.isdir(gesture_path):
-            continue
-        
         print(f"Loading '{gesture}' images...", end=" ")
         count = 0
         
         for img_file in os.listdir(gesture_path):
-            if img_file.endswith('.jpg'):
+            if img_file.lower().endswith(('.jpg', '.jpeg', '.png')):
                 img_path = os.path.join(gesture_path, img_file)
                 
                 # Read and resize image
                 img = cv2.imread(img_path)
+                if img is None:
+                    continue
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 img = cv2.resize(img, (img_size, img_size))
                 img = preprocess_input(img)
@@ -45,7 +62,7 @@ def preprocess_data(img_size=224, data_dir='data/train'):
                 labels.append(idx)
                 count += 1
         
-        print(f"✓ {count} images")
+        print(f"[OK] {count} images")
     
     images = np.array(images)
     labels = np.array(labels)
@@ -78,12 +95,12 @@ def preprocess_data(img_size=224, data_dir='data/train'):
     )
     
     # Convert labels to one-hot encoding
-    from tensorflow.keras.utils import to_categorical
     y_train = to_categorical(y_train)
     y_val = to_categorical(y_val)
     y_test = to_categorical(y_test)
     
     # Save preprocessed data
+    os.makedirs('data', exist_ok=True)
     np.save('data/X_train.npy', X_train)
     np.save('data/X_val.npy', X_val)
     np.save('data/X_test.npy', X_test)
@@ -94,7 +111,7 @@ def preprocess_data(img_size=224, data_dir='data/train'):
     with open('data/label_map.pkl', 'wb') as f:
         pickle.dump(label_map, f)
     
-    print(f"\n✓ Data saved successfully!")
+    print(f"\n[OK] Data saved successfully!")
     
     return X_train, X_val, X_test, y_train, y_val, y_test, label_map, datagen
 

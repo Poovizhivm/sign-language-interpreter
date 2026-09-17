@@ -1,3 +1,5 @@
+import os
+import sys
 import numpy as np
 import pickle
 from tensorflow.keras.applications import MobileNetV2
@@ -6,6 +8,14 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.utils.class_weight import compute_class_weight
+
+# Ensure UTF-8 output encoding for Windows consoles
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 
 def build_model(num_classes=6, img_size=224):
@@ -50,17 +60,17 @@ def build_model(num_classes=6, img_size=224):
     print(model.summary())
     return model
 
-def train_model():
+def train_model(epochs=50, batch_size=32):
     """
     Train the model with preprocessed data
     """
+    os.makedirs('models', exist_ok=True)
     
     # Load preprocessed data
     X_train = np.load('data/X_train.npy')
     X_val = np.load('data/X_val.npy')
     y_train = np.load('data/y_train.npy')
-    y_val = np.load('data/y_val.npy'
-    )
+    y_val = np.load('data/y_val.npy')
     
     y_integers = np.argmax(y_train, axis=1)
 
@@ -79,6 +89,13 @@ def train_model():
     # Unfreeze last 30 layers
     for layer in base_model.layers[-30:]:
         layer.trainable = True
+
+    # Recompile model to reflect unfrozen layers
+    model.compile(
+        optimizer=Adam(learning_rate=0.0001),
+        loss='categorical_crossentropy',
+        metrics=['accuracy']
+    )
 
     # Data augmentation
     datagen = ImageDataGenerator(
@@ -111,12 +128,14 @@ def train_model():
     print("TRAINING MODEL")
     print(f"{'='*50}\n")
     
+    steps_per_epoch = int(np.ceil(len(X_train) / batch_size))
+    
     history = model.fit(
-        datagen.flow(X_train, y_train, batch_size=32),
-        epochs=50,
+        datagen.flow(X_train, y_train, batch_size=batch_size),
+        epochs=epochs,
         validation_data=(X_val, y_val),
         callbacks=callbacks,
-        steps_per_epoch=len(X_train) ,
+        steps_per_epoch=steps_per_epoch,
         class_weight=class_weights,
         verbose=1
     )

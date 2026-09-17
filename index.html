@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Indian Sign Language Interpreter | MobileNetV2</title>
+  <meta name="description" content="Real-time Indian Sign Language interpreter running in-browser with MobileNetV2 deep learning model. Powered by ONNX Runtime Web.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <!-- ONNX Runtime Web for Browser-native In-Memory GPU/WASM Inference -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+</head>
+<body>
+
+  <header>
+    <div class="nav-container">
+      <div class="brand">
+        <div class="brand-icon">🤟</div>
+        <div>
+          <h1>ISL Interpreter</h1>
+          <span>MobileNetV2 Deep Learning</span>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="status-badge" id="modelStatusBadge">
+          <span class="status-dot"></span>
+          <span id="modelStatusText">Loading Model...</span>
+        </div>
+        <div class="nav-links">
+          <a href="https://github.com/poovizhivm/sign-language-interpreter" target="_blank" class="btn-secondary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            GitHub
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="tabs-nav">
+      <button class="tab-btn active" data-tab="camera-tab">📹 Live Webcam</button>
+      <button class="tab-btn" data-tab="samples-tab">🖐️ Sample Gestures</button>
+      <button class="tab-btn" data-tab="upload-tab">📁 Upload Image</button>
+      <button class="tab-btn" data-tab="research-tab">📊 Research & Metrics</button>
+    </div>
+
+    <!-- TAB 1: LIVE WEBCAM -->
+    <div class="tab-pane active" id="camera-tab">
+      <div class="interpreter-layout">
+        
+        <div class="glass-card camera-card">
+          <div class="viewport-container">
+            <video id="videoFeed" autoplay playsinline muted></video>
+            <canvas id="outputCanvas"></canvas>
+
+            <div class="hud-overlay">
+              <div class="hud-banner" id="hudBanner">
+                <span class="hud-label">Detected Gesture</span>
+                <div class="hud-prediction">
+                  <span id="predictedEmoji">⏳</span>
+                  <span id="predictedGesture">Waiting for camera...</span>
+                </div>
+                <div class="hud-confidence" id="confidenceScore">0.0% Confidence</div>
+              </div>
+              <div class="hud-fps" id="fpsDisplay">FPS: 0</div>
+            </div>
+          </div>
+
+          <div class="camera-controls">
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <button class="btn-primary" id="startCamBtn">▶ Start Camera</button>
+              <button class="btn-icon" id="flipCamBtn" title="Flip Mirror View">🔄</button>
+              <button class="btn-icon active" id="voiceToggleBtn" title="Toggle Voice Announcement">🔊</button>
+            </div>
+
+            <div class="settings-bar">
+              <div class="slider-group">
+                <label for="confSlider">Threshold:</label>
+                <input type="range" id="confSlider" min="30" max="95" value="60">
+                <span id="confValue">60%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="metrics-side">
+          <div class="glass-card">
+            <div class="section-title">
+              <span>Gesture Probabilities</span>
+              <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal;">Live Softmax</span>
+            </div>
+            <div class="probabilities-list" id="probabilitiesList">
+              <!-- Dynamically rendered -->
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <div class="section-title">
+              <span>Recent Detections</span>
+              <button id="clearHistoryBtn" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.8rem;">Clear</button>
+            </div>
+            <div class="history-container" id="historyContainer">
+              <div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.85rem;">No gestures detected yet</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TAB 2: SAMPLE GESTURES -->
+    <div class="tab-pane" id="samples-tab">
+      <div class="glass-card" style="margin-bottom: 1.5rem;">
+        <h2 style="font-family: var(--font-heading); font-size: 1.3rem; margin-bottom: 0.5rem;">Instant Gesture Testing</h2>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">Click any sample below to evaluate the deep learning model directly without needing a webcam:</p>
+      </div>
+
+      <div class="sample-grid">
+        <div class="sample-card" data-gesture="good" data-src="sample_gestures/good.jpg">
+          <img src="sample_gestures/good.jpg" alt="Good Gesture" loading="lazy">
+          <div class="sample-card-body">
+            <div class="sample-card-title">👍 Good</div>
+            <span class="sample-badge">Click to Predict</span>
+          </div>
+        </div>
+
+        <div class="sample-card" data-gesture="hello" data-src="sample_gestures/hello.jpg">
+          <img src="sample_gestures/hello.jpg" alt="Hello Gesture" loading="lazy">
+          <div class="sample-card-body">
+            <div class="sample-card-title">👋 Hello</div>
+            <span class="sample-badge">Click to Predict</span>
+          </div>
+        </div>
+
+        <div class="sample-card" data-gesture="help" data-src="sample_gestures/help.jpg">
+          <img src="sample_gestures/help.jpg" alt="Help Gesture" loading="lazy">
+          <div class="sample-card-body">
+            <div class="sample-card-title">🆘 Help</div>
+            <span class="sample-badge">Click to Predict</span>
+          </div>
+        </div>
+
+        <div class="sample-card" data-gesture="no" data-src="sample_gestures/no.jpg">
+          <img src="sample_gestures/no.jpg" alt="No Gesture" loading="lazy">
+          <div class="sample-card-body">
+            <div class="sample-card-title">✋ No</div>
+            <span class="sample-badge">Click to Predict</span>
+          </div>
+        </div>
+
+        <div class="sample-card" data-gesture="thank_you" data-src="sample_gestures/thank_you.jpg">
+          <img src="sample_gestures/thank_you.jpg" alt="Thank You Gesture" loading="lazy">
+          <div class="sample-card-body">
+            <div class="sample-card-title">🙏 Thank You</div>
+            <span class="sample-badge">Click to Predict</span>
+          </div>
+        </div>
+
+        <div class="sample-card" data-gesture="yes" data-src="sample_gestures/yes.jpg">
+          <img src="sample_gestures/yes.jpg" alt="Yes Gesture" loading="lazy">
+          <div class="sample-card-body">
+            <div class="sample-card-title">👌 Yes</div>
+            <span class="sample-badge">Click to Predict</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preview Modal / Result for Sample -->
+      <div id="sampleResultBox" class="glass-card" style="margin-top: 2rem; display: none;">
+        <h3 style="font-family: var(--font-heading); margin-bottom: 1rem;">Prediction Result:</h3>
+        <div id="sampleResultContent"></div>
+      </div>
+    </div>
+
+    <!-- TAB 3: UPLOAD IMAGE -->
+    <div class="tab-pane" id="upload-tab">
+      <div class="glass-card upload-zone" id="uploadDropzone">
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        <div class="upload-icon">📤</div>
+        <h3 style="font-family: var(--font-heading); font-size: 1.3rem; margin-bottom: 0.5rem;">Upload a Hand Gesture Photo</h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">Drag & drop or click to choose an image from your device</p>
+      </div>
+
+      <div id="uploadResultCard" class="glass-card" style="margin-top: 2rem; display: none;">
+        <div style="display: flex; gap: 2rem; flex-wrap: wrap; align-items: center;">
+          <img id="uploadedPreview" style="max-width: 250px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);" alt="Uploaded preview">
+          <div style="flex: 1;" id="uploadDetails"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: RESEARCH & METRICS -->
+    <div class="tab-pane" id="research-tab">
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-value">94.44%</div>
+          <div class="stat-title">Overall Test Accuracy</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">0.9530</div>
+          <div class="stat-title">Macro Precision</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">0.9429</div>
+          <div class="stat-title">Macro F1-Score</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">1.0000</div>
+          <div class="stat-title">ROC-AUC Score</div>
+        </div>
+      </div>
+
+      <div class="visuals-grid">
+        <div class="visual-item">
+          <div class="visual-title">Comprehensive 9-Panel Evaluation Dashboard</div>
+          <img src="evaluation_metrics.png" alt="Evaluation Dashboard" loading="lazy">
+        </div>
+
+        <div class="visual-item">
+          <div class="visual-title">One-vs-Rest ROC-AUC Curves</div>
+          <img src="roc_auc_curves.png" alt="ROC-AUC Curves" loading="lazy">
+        </div>
+
+        <div class="visual-item">
+          <div class="visual-title">High-Resolution Confusion Matrix</div>
+          <img src="confusion_matrix.png" alt="Confusion Matrix" loading="lazy">
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <p>Indian Sign Language (ISL) Interpreter with MobileNetV2 Deep Learning &middot; Developed for Academic Research</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
