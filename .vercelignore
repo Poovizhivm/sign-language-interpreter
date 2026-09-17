@@ -1,0 +1,11 @@
+# Exclude Python backend and dataset from Vercel static web deployment
+requirements.txt
+scripts/
+data/
+models/
+venv/
+*.py
+*.pyc
+__pycache__/
+*.png
+.vscode/
